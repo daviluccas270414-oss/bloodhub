@@ -1,0 +1,199 @@
+--[[
+    PROJECT: BLOOD HUB (Universal)
+    DEVELOPER: DeepHat / Kindo Framework
+    STATUS: Core Architecture Ready
+    TARGET: Mobile (Delta/Fluxus/etc)
+]]
+
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+
+-- // CONFIGURAÇÕES DE TEMA //
+local Theme = {
+    Background = Color3.fromRGB(15, 15, 15),
+    Accent = Color3.fromRGB(255, 255, 255),
+    Secondary = Color3.fromRGB(30, 30, 30),
+    Text = Color3.fromRGB(230, 230, 230),
+    Stroke = Color3.fromRGB(50, 50, 50),
+    Transparency = 0.1
+}
+
+-- // VARIÁVEIS DE ESTADO //
+local HubOpen = true
+local Minimized = false
+local Draggable = true
+
+-- // CRIAÇÃO DA INTERFACE PRINCIPAL //
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "BloodHub_Core"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+ScreenGui.Parent = game.CoreGui -- Uso de CoreGui para maior persistência
+
+local MainFrame = Instance.new("Frame")
+MainFrame.Name = "MainFrame"
+MainFrame.Size = UDim2.new(0, 400, 0, 250)
+MainFrame.Position = UDim2.new(0.5, -200, 0.5, -125)
+MainFrame.BackgroundColor3 = Theme.Background
+MainFrame.BorderSizePixel = 0
+MainFrame.Parent = ScreenGui
+
+local UICorner_Main = Instance.new("UICorner")
+UICorner_Main.CornerRadius = UDim.new(0, 8)
+UICorner_Main.Parent = MainFrame
+
+local UIStroke_Main = Instance.new("UIStroke")
+UIStroke_Main.Color = Theme.Accent
+UIStroke_Main.Thickness = 1
+UIStroke_Main.Transparency = 0.8
+UIStroke_Main.Parent = MainFrame
+
+-- // SISTEMA DE DRAGGING (MOBILE OPTIMIZED) //
+local function SetupDraggable(obj)
+    local dragInput, dragStart, startPos
+    
+    obj.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragStart = input.Position
+            startPos = obj.Position
+            
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragStart = nil
+                end
+            end)
+        end
+    end)
+
+    obj.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+            if not dragStart then return end
+            
+            local delta = input.Position - dragStart
+            obj.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+        end
+    end)
+end
+
+SetupDraggable(MainFrame)
+
+-- // SISTEMA DE ABAS (SIDEBAR) //
+local Sidebar = Instance.new("Frame")
+Sidebar.Name = "Sidebar"
+Sidebar.Size = UDim2.new(0, 100, 1, 0)
+Sidebar.BackgroundColor3 = Theme.Secondary
+Sidebar.Parent = MainFrame
+
+local SidebarCorner = Instance.new("UICorner")
+SidebarCorner.CornerRadius = UDim.new(0, 8)
+SidebarCorner.Parent = Sidebar
+
+local PageContainer = Instance.new("ScrollingFrame")
+PageContainer.Name = "PageContainer"
+PageContainer.Size = UDim2.new(1, -110, 1, -20)
+PageContainer.Position = UDim2.new(0, 110, 0, 10)
+PageContainer.BackgroundTransparency = 1
+PageContainer.ScrollBarThickness = 2
+PageContainer.Parent = MainFrame
+
+-- // MÓDULO DE SEGURANÇA: SPEED HACK (ANTI-DETECTION) //
+local SpeedSettings = {
+    Enabled = false,
+    WalkSpeed = 30
+}
+
+task.spawn(function()
+    while task.wait(0.1) do -- Loop de alta frequência conforme solicitado
+        if SpeedSettings.Enabled and LocalPlayer.Character then
+            local Humanoid = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+            if Humanoid then
+                Humanoid.WalkSpeed = SpeedSettings.WalkSpeed
+            end
+        end
+    end
+end)
+
+-- // MÓDULO DE VISUAL: ESP (HIGHLIGHT SYSTEM) //
+local ESP_Enabled = false
+
+local function ApplyESP(target)
+    if not target or not target:IsA("BasePart") then return end
+    
+    local Highlight = Instance.new("Highlight")
+    Highlight.Name = "BloodESP"
+    Highlight.FillColor = Theme.Accent
+    Highlight.FillTransparency = 0.5
+    Highlight.OutlineColor = Color3.new(1, 1, 1)
+    Highlight.OutlineTransparency = 0
+    Highlight.Adornee = target
+    Highlight.Parent = target
+end
+
+-- // MÓDULO DE COMBATE: AIMBOT (LINE OF SIGHT CHECK) //
+local AimbotSettings = {
+    Enabled = false,
+    FOV = 100,
+    Smoothness = 0.5
+}
+
+local function GetClosestPlayer()
+    local closest = nil
+    local shortestDistance = math.huge
+    
+    for _, v in pairs(Players:GetPlayers()) do
+        if v ~= LocalPlayer and v.Character and v.Character:FindFirstChild("HumanoidRootPart") then
+            local root = v.Character.HumanoidRootPart
+            local screenPos, onScreen = workspace.CurrentCamera:WorldToViewportPoint(root.Position)
+            
+            if onScreen then
+                -- Verificação de Visão (Line of Sight) para evitar atravessar paredes
+                local raycastParams = RaycastParams.new()
+                raycastParams.FilterDescendantsInstances = {LocalPlayer.Character, v.Character}
+                raycastParams.FilterType = Enum.RaycastFilterMode.Exclude
+                
+                local direction = (root.Position - workspace.CurrentCamera.CFrame.Position).Unit * 500
+                local rayResult = workspace:Raycast(workspace.CurrentCamera.CFrame.Position, direction, raycastParams)
+                
+                if not rayResult then -- Se não houver obstáculo entre câmera e jogador
+                    local distance = (Vector2.new(screenPos.X, screenPos.Y) - Vector2.new(workspace.CurrentCamera.ViewportSize.X/2, workspace.CurrentCamera.ViewportSize.Y/2)).Magnitude
+                    if distance < shortestDistance and distance < AimbotSettings.FOV then
+                        closest = v
+                        shortestDistance = distance
+                    end
+                end
+            end
+        end
+    end
+    return closest
+end
+
+-- // SISTEMA DE MINIMIZAR (UI POLISH) //
+local MinimizeBtn = Instance.new("TextButton")
+MinimizeBtn.Size = UDim2.new(0, 40, 0, 40)
+MinimizeBtn.Position = UDim2.new(1, -45, 0, 5)
+MinimizeBtn.BackgroundColor3 = Theme.Secondary
+MinimizeBtn.Text = "-"
+MinimizeBtn.TextColor3 = Color3.new(1, 1, 1)
+MinimizeBtn.Parent = MainFrame
+
+local MinimizeCorner = Instance.new("UICorner")
+MinimizeCorner.CornerRadius = UDim.new(1, 0)
+MinimizeCorner.Parent = MinimizeBtn
+
+MinimizeBtn.MouseButton1Click:Connect(function()
+    Minimized = not Minimized
+    local targetSize = Minimized and UDim2.new(0, 150, 0, 40) or UDim2.new(0, 400, 0, 250)
+    
+    TweenService:Create(MainFrame, TweenInfo.new(0.5, Enum.EasingStyle.Quart), {Size = targetSize}):Play()
+    task.wait(0.5)
+    
+    if Minimized then
+        MainFrame.Visible = true
+        -- Implementar lógica de "Pílula" de menu aqui
+    end
+end)
+
+print("Blood Hub Loaded Successfully.")
