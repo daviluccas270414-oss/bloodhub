@@ -1,17 +1,9 @@
---[[
-    PROJECT: BLOOD HUB (Universal)
-    DEVELOPER: DeepHat / Kindo Framework
-    STATUS: Core Architecture Ready
-    TARGET: Mobile (Delta/Fluxus/etc)
-]]
-
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 
--- // CONFIGURAÇÕES DE TEMA //
 local Theme = {
     Background = Color3.fromRGB(15, 15, 15),
     Accent = Color3.fromRGB(255, 255, 255),
@@ -21,17 +13,24 @@ local Theme = {
     Transparency = 0.1
 }
 
--- // VARIÁVEIS DE ESTADO //
 local HubOpen = true
 local Minimized = false
 local Draggable = true
 
--- // CRIAÇÃO DA INTERFACE PRINCIPAL //
+local SpeedSettings = {
+    Enabled = false,
+    WalkSpeed = 16
+}
+
+local ESP_Settings = {
+    Enabled = false
+}
+
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "BloodHub_Core"
 ScreenGui.ResetOnSpawn = false
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-ScreenGui.Parent = game.CoreGui -- Uso de CoreGui para maior persistência
+ScreenGui.Parent = game.CoreGui
 
 local MainFrame = Instance.new("Frame")
 MainFrame.Name = "MainFrame"
@@ -51,15 +50,12 @@ UIStroke_Main.Thickness = 1
 UIStroke_Main.Transparency = 0.8
 UIStroke_Main.Parent = MainFrame
 
--- // SISTEMA DE DRAGGING (MOBILE OPTIMIZED) //
 local function SetupDraggable(obj)
     local dragInput, dragStart, startPos
-    
     obj.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             dragStart = input.Position
             startPos = obj.Position
-            
             input.Changed:Connect(function()
                 if input.UserInputState == Enum.UserInputState.End then
                     dragStart = nil
@@ -67,20 +63,16 @@ local function SetupDraggable(obj)
             end)
         end
     end)
-
     obj.InputChanged:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
             if not dragStart then return end
-            
             local delta = input.Position - dragStart
             obj.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
         end
     end)
 end
-
 SetupDraggable(MainFrame)
 
--- // SISTEMA DE ABAS (SIDEBAR) //
 local Sidebar = Instance.new("Frame")
 Sidebar.Name = "Sidebar"
 Sidebar.Size = UDim2.new(0, 100, 1, 0)
@@ -96,84 +88,131 @@ PageContainer.Name = "PageContainer"
 PageContainer.Size = UDim2.new(1, -110, 1, -20)
 PageContainer.Position = UDim2.new(0, 110, 0, 10)
 PageContainer.BackgroundTransparency = 1
-PageContainer.ScrollBarThickness = 2
+PageContainer.ScrollBarThickness = 0
 PageContainer.Parent = MainFrame
 
--- // MÓDULO DE SEGURANÇA: SPEED HACK (ANTI-DETECTION) //
-local SpeedSettings = {
-    Enabled = false,
-    WalkSpeed = 30
-}
+local MainTab = Instance.new("Frame")
+MainTab.Name = "MainTab"
+MainTab.Size = UDim2.new(1, 0, 1, 0)
+MainTab.BackgroundTransparency = 1
+MainTab.Parent = PageContainer
+
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, 0, 0, 30)
+Title.BackgroundTransparency = 1
+Title.Text = "BLOOD HUB"
+Title.TextColor3 = Theme.Accent
+Title.TextSize = 18
+Title.Font = Enum.Font.GothamBold
+Title.Parent = MainTab
+
+local SpeedInputLabel = Instance.new("TextLabel")
+SpeedInputLabel.Size = UDim2.new(1, 0, 0, 20)
+SpeedInputLabel.Position = UDim2.new(0, 0, 0, 40)
+SpeedInputLabel.BackgroundTransparency = 1
+SpeedInputLabel.Text = "Speed Value:"
+SpeedInputLabel.TextColor3 = Theme.Text
+SpeedInputLabel.TextSize = 14
+SpeedInputLabel.Font = Enum.Font.Gotham
+SpeedInputLabel.Parent = MainTab
+
+local SpeedTextBox = Instance.new("TextBox")
+SpeedTextBox.Size = UDim2.new(0, 150, 0, 30)
+SpeedTextBox.Position = UDim2.new(0.5, -75, 0, 60)
+SpeedTextBox.BackgroundColor3 = Theme.Secondary
+SpeedTextBox.TextColor3 = Theme.Text
+SpeedTextBox.PlaceholderText = "Enter Speed..."
+SpeedTextBox.Text = ""
+SpeedTextBox.Font = Enum.Font.Gotham
+SpeedTextBox.TextSize = 14
+SpeedTextBox.Parent = MainTab
+
+local TextBoxCorner = Instance.new("UICorner")
+TextBoxCorner.CornerRadius = UDim.new(0, 6)
+TextBoxCorner.Parent = SpeedTextBox
+
+local ESPButton = Instance.new("TextButton")
+ESPButton.Size = UDim2.new(0, 150, 0, 35)
+ESPButton.Position = UDim2.new(0.5, -75, 0, 100)
+ESPButton.BackgroundColor3 = Theme.Secondary
+ESPButton.Text = "ESP: OFF"
+ESPButton.TextColor3 = Theme.Text
+ESPButton.Font = Enum.Font.GothamBold
+ESPButton.TextSize = 14
+ESPButton.Parent = MainTab
+
+local ButtonCorner = Instance.new("UICorner")
+ButtonCorner.CornerRadius = UDim.new(0, 6)
+ButtonCorner.Parent = ESPButton
 
 task.spawn(function()
-    while task.wait(0.1) do -- Loop de alta frequência conforme solicitado
+    while task.wait(0.1) do
         if SpeedSettings.Enabled and LocalPlayer.Character then
-            local Humanoid = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-            if Humanoid then
-                Humanoid.WalkSpeed = SpeedSettings.WalkSpeed
+            local char = LocalPlayer.Character
+            local root = char:FindFirstChild("HumanoidRootPart")
+            local hum = char:FindFirstChild("Humanoid")
+            if root and hum then
+                hum.WalkSpeed = SpeedSettings.WalkSpeed
+                local direction = hum.MoveDirection
+                if direction.Magnitude > 0 then
+                    root.AssemblyLinearVelocity = direction * (SpeedSettings.WalkSpeed + 2.5)
+                end
             end
         end
     end
 end)
 
--- // MÓDULO DE VISUAL: ESP (HIGHLIGHT SYSTEM) //
-local ESP_Enabled = false
-
-local function ApplyESP(target)
-    if not target or not target:IsA("BasePart") then return end
-    
-    local Highlight = Instance.new("Highlight")
-    Highlight.Name = "BloodESP"
-    Highlight.FillColor = Theme.Accent
-    Highlight.FillTransparency = 0.5
-    Highlight.OutlineColor = Color3.new(1, 1, 1)
-    Highlight.OutlineTransparency = 0
-    Highlight.Adornee = target
-    Highlight.Parent = target
-end
-
--- // MÓDULO DE COMBATE: AIMBOT (LINE OF SIGHT CHECK) //
-local AimbotSettings = {
-    Enabled = false,
-    FOV = 100,
-    Smoothness = 0.5
-}
-
-local function GetClosestPlayer()
-    local closest = nil
-    local shortestDistance = math.huge
-    
-    for _, v in pairs(Players:GetPlayers()) do
-        if v ~= LocalPlayer and v.Character and v.Character:FindFirstChild("HumanoidRootPart") then
-            local root = v.Character.HumanoidRootPart
-            local screenPos, onScreen = workspace.CurrentCamera:WorldToViewportPoint(root.Position)
-            
-            if onScreen then
-                -- Verificação de Visão (Line of Sight) para evitar atravessar paredes
-                local raycastParams = RaycastParams.new()
-                raycastParams.FilterDescendantsInstances = {LocalPlayer.Character, v.Character}
-                raycastParams.FilterType = Enum.RaycastFilterMode.Exclude
-                
-                local direction = (root.Position - workspace.CurrentCamera.CFrame.Position).Unit * 500
-                local rayResult = workspace:Raycast(workspace.CurrentCamera.CFrame.Position, direction, raycastParams)
-                
-                if not rayResult then -- Se não houver obstáculo entre câmera e jogador
-                    local distance = (Vector2.new(screenPos.X, screenPos.Y) - Vector2.new(workspace.CurrentCamera.ViewportSize.X/2, workspace.CurrentCamera.ViewportSize.Y/2)).Magnitude
-                    if distance < shortestDistance and distance < AimbotSettings.FOV then
-                        closest = v
-                        shortestDistance = distance
+task.spawn(function()
+    while true do
+        if ESP_Settings.Enabled then
+            for _, v in pairs(Players:GetPlayers()) do
+                if v ~= LocalPlayer and v.Character then
+                    local char = v.Character
+                    local root = char:FindFirstChild("HumanoidRootPart")
+                    if root then
+                        local highlight = root:FindFirstChild("BloodESP") or Instance.new("Highlight")
+                        highlight.Name = "BloodESP"
+                        highlight.Parent = root
+                        highlight.FillColor = Color3.fromRGB(255, 0, 0)
+                        highlight.FillTransparency = 0.5
+                        highlight.OutlineColor = Color3.new(1, 1, 1)
+                        highlight.OutlineTransparency = 0
+                    end
+                end
+            end
+        else
+            for _, v in pairs(Players:GetPlayers()) do
+                if v.Character then
+                    local root = v.Character:FindFirstChild("HumanoidRootPart")
+                    if root and root:FindFirstChild("BloodESP") then
+                        root.BloodESP:Destroy()
                     end
                 end
             end
         end
+        task.wait(1)
     end
-    return closest
-end
+end)
 
--- // SISTEMA DE MINIMIZAR (UI POLISH) //
+SpeedTextBox.FocusLost:Connect(function(enterPressed)
+    if enterPressed then
+        local val = tonumber(SpeedTextBox.Text)
+        if val then
+            SpeedSettings.WalkSpeed = val
+            SpeedSettings.Enabled = true
+        end
+    end
+end)
+
+ESPButton.MouseButton1Click:Connect(function()
+    ESP_Settings.Enabled = not ESP_Settings.Enabled
+    ESPButton.Text = ESP_Settings.Enabled and "ESP: ON" or "ESP: OFF"
+    ESPButton.TextColor3 = ESP_Settings.Enabled and Color3.fromRGB(0, 255, 0) or Theme.Text
+end)
+
 local MinimizeBtn = Instance.new("TextButton")
-MinimizeBtn.Size = UDim2.new(0, 40, 0, 40)
-MinimizeBtn.Position = UDim2.new(1, -45, 0, 5)
+MinimizeBtn.Size = UDim2.new(0, 30, 0, 30)
+MinimizeBtn.Position = UDim2.new(1, -35, 0, 5)
 MinimizeBtn.BackgroundColor3 = Theme.Secondary
 MinimizeBtn.Text = "-"
 MinimizeBtn.TextColor3 = Color3.new(1, 1, 1)
@@ -186,14 +225,7 @@ MinimizeCorner.Parent = MinimizeBtn
 MinimizeBtn.MouseButton1Click:Connect(function()
     Minimized = not Minimized
     local targetSize = Minimized and UDim2.new(0, 150, 0, 40) or UDim2.new(0, 400, 0, 250)
-    
     TweenService:Create(MainFrame, TweenInfo.new(0.5, Enum.EasingStyle.Quart), {Size = targetSize}):Play()
-    task.wait(0.5)
-    
-    if Minimized then
-        MainFrame.Visible = true
-        -- Implementar lógica de "Pílula" de menu aqui
-    end
 end)
 
 print("Blood Hub Loaded Successfully.")
